@@ -1,26 +1,14 @@
-const SENSOR_API =
-    window.__CONFIG__.SENSOR_API_URL;
-
-const ALLOCATION_API =
-    window.__CONFIG__.ALLOCATION_API_URL;
-
-const ANALYTICS_API =
-    window.__CONFIG__.ANALYTICS_API_URL;
-
-const NOTIFICATION_API =
-    window.__CONFIG__.NOTIFICATION_API_URL;
-
+const SENSOR_API = "/api/sensor";
+const ALLOCATION_API = "/api/allocation";
+const ANALYTICS_API = "/api/analytics";
+const NOTIFICATION_API = "/api/notification";
 
 async function getJson(url, options = {}) {
+    const response = await fetch(url, options);
 
-    const response =
-        await fetch(url, options);
-
-    const data =
-        await response.json();
+    const data = await response.json();
 
     if (!response.ok) {
-
         throw new Error(
             data.error ||
             `Request failed: ${response.status}`
@@ -32,54 +20,43 @@ async function getJson(url, options = {}) {
 
 
 async function loadData() {
-
     try {
 
-        const spaces =
-            await getJson(
-                `${SENSOR_API}/api/spaces`
-            );
+        const spaces = await getJson(
+            `${SENSOR_API}/spaces`
+        );
 
-        const analytics =
-            await getJson(
-                `${ANALYTICS_API}/api/analytics/reservations`
-            );
+        const analytics = await getJson(
+            `${ANALYTICS_API}/reservations`
+        );
 
 
-        const occupied =
-            spaces.filter(
-                space => space.occupancy_status === true
-            ).length;
+        const occupied = spaces.filter(
+            space => space.occupancy_status === true
+        ).length;
 
 
         document.getElementById("total")
             .textContent = spaces.length;
 
-
         document.getElementById("occupied")
             .textContent = occupied;
 
-
         document.getElementById("available")
-            .textContent =
-            spaces.length - occupied;
-
+            .textContent = spaces.length - occupied;
 
         document.getElementById("reservations")
-            .textContent =
-            analytics.length;
+            .textContent = analytics.length;
 
 
         document.getElementById("spaces")
             .innerHTML = spaces.map(space => `
 
-                <div
-                    class="space ${
-                        space.occupancy_status
-                            ? "occupied"
-                            : "available"
-                    }"
-                >
+                <div class="space ${
+                    space.occupancy_status
+                        ? "occupied"
+                        : "available"
+                }">
 
                     <strong>
                         ${space.location}
@@ -120,8 +97,7 @@ async function loadData() {
 
 
         document.getElementById("status")
-            .textContent =
-            "System online";
+            .textContent = "System online";
 
 
     } catch (error) {
@@ -129,8 +105,7 @@ async function loadData() {
         console.error(error);
 
         document.getElementById("status")
-            .textContent =
-            "API unavailable";
+            .textContent = "API unavailable";
     }
 }
 
@@ -150,13 +125,12 @@ async function reserveSpace() {
 
         const result =
             await getJson(
-                `${ALLOCATION_API}/api/allocate`,
+                `${ALLOCATION_API}/allocate`,
                 {
                     method: "POST",
 
                     headers: {
-                        "Content-Type":
-                            "application/json"
+                        "Content-Type": "application/json"
                     },
 
                     body: JSON.stringify({
@@ -167,32 +141,28 @@ async function reserveSpace() {
 
 
         message.textContent =
-            `Reserved ${result.space.location}
-             (reservation #${result.reservation.reservation_id}).`;
+            `Reserved ${result.space.location} ` +
+            `(reservation #${result.reservation.reservation_id}).`;
 
 
-        if (NOTIFICATION_API) {
+        await getJson(
+            `${NOTIFICATION_API}/notify`,
+            {
+                method: "POST",
 
-            await getJson(
-                `${NOTIFICATION_API}/api/notify`,
-                {
-                    method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
+                body: JSON.stringify({
+                    user_id: userId,
 
-                    body: JSON.stringify({
-                        user_id: userId,
-
-                        message:
-                            `Parking space ${result.space.location}
-                             reserved successfully.`
-                    })
-                }
-            );
-        }
+                    message:
+                        `Parking space ${result.space.location} ` +
+                        `reserved successfully.`
+                })
+            }
+        );
 
 
         await loadData();
