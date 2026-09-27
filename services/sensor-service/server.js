@@ -1,6 +1,7 @@
 const express = require("express");
 const mysql = require("mysql2/promise");
 const path = require("path");
+const cors = require("cors");
 
 require("dotenv").config({
     path: path.resolve(__dirname, "../../.env")
@@ -9,7 +10,7 @@ require("dotenv").config({
 const app = express();
 
 app.use(express.json());
-
+app.use(cors());
 
 app.get("/", (req, res) => {
     res.json({
@@ -24,6 +25,31 @@ const db = mysql.createPool({
     user: "root",
     password: process.env.DB_PASSWORD,
     database: "smart_parking"
+});
+
+
+
+app.get("/api/spaces", async (req, res) => {
+    try {
+        const [rows] = await db.query(`
+            SELECT
+                parking_space_id,
+                location,
+                occupancy_status,
+                last_updated
+            FROM ParkingSpaces
+            ORDER BY parking_space_id
+        `);
+
+        res.json(rows);
+
+    } catch (error) {
+        console.error("Failed to retrieve parking spaces:", error);
+
+        res.status(500).json({
+            error: "Failed to retrieve parking spaces"
+        });
+    }
 });
 
 
