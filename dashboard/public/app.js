@@ -1,4 +1,4 @@
-const SENSOR_API = "https://smart-parking-system-k2vp.onrender.com/api";
+const SENSOR_API = "/api/sensor";
 const ALLOCATION_API = "/api/allocation";
 const ANALYTICS_API = "/api/analytics";
 const NOTIFICATION_API = "/api/notification";

@@ -54,7 +54,7 @@ services:
       - key: DATABASE_URL
 
         fromDatabase:
-          name: parksense-db
+          name: smart-park-sys-db
           property: connectionString
 
       - key: NODE_ENV
@@ -75,7 +75,7 @@ services:
       - key: DATABASE_URL
 
         fromDatabase:
-          name: parksense-db
+          name: smart-park-sys-db
           property: connectionString
 
       - key: NODE_ENV
@@ -111,7 +111,7 @@ services:
       - key: DATABASE_URL
 
         fromDatabase:
-          name: parksense-db
+          name: smart-park-sys-db
           property: connectionString
 
       - key: NODE_ENV
@@ -120,8 +120,8 @@ services:
 
 databases:
 
-  - name: parksense-db
+  - name: smart-park-sys-db
 
-    databaseName: smart_parking
+    databaseName: smart_parking_sys
 
-    user: parksense
+    user: smart_parking_sys_user
