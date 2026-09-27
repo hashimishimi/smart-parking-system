@@ -1,170 +1,214 @@
-const SENSOR_API = "http://localhost:3000";
-const ALLOCATION_API = "http://localhost:3001";
-const ANALYTICS_API = "http://localhost:3003";
+const SENSOR_API =
+    window.__CONFIG__.SENSOR_API_URL;
 
-async function loadDashboard() {
+const ALLOCATION_API =
+    window.__CONFIG__.ALLOCATION_API_URL;
+
+const ANALYTICS_API =
+    window.__CONFIG__.ANALYTICS_API_URL;
+
+const NOTIFICATION_API =
+    window.__CONFIG__.NOTIFICATION_API_URL;
+
+
+async function getJson(url, options = {}) {
+
+    const response =
+        await fetch(url, options);
+
+    const data =
+        await response.json();
+
+    if (!response.ok) {
+
+        throw new Error(
+            data.error ||
+            `Request failed: ${response.status}`
+        );
+    }
+
+    return data;
+}
+
+
+async function loadData() {
+
     try {
-        await Promise.all([
-            loadParkingSpaces(),
-            loadOccupancyAnalytics(),
-            loadReservationAnalytics()
-        ]);
+
+        const spaces =
+            await getJson(
+                `${SENSOR_API}/api/spaces`
+            );
+
+        const analytics =
+            await getJson(
+                `${ANALYTICS_API}/api/analytics/reservations`
+            );
+
+
+        const occupied =
+            spaces.filter(
+                space => space.occupancy_status === true
+            ).length;
+
+
+        document.getElementById("total")
+            .textContent = spaces.length;
+
+
+        document.getElementById("occupied")
+            .textContent = occupied;
+
+
+        document.getElementById("available")
+            .textContent =
+            spaces.length - occupied;
+
+
+        document.getElementById("reservations")
+            .textContent =
+            analytics.length;
+
+
+        document.getElementById("spaces")
+            .innerHTML = spaces.map(space => `
+
+                <div
+                    class="space ${
+                        space.occupancy_status
+                            ? "occupied"
+                            : "available"
+                    }"
+                >
+
+                    <strong>
+                        ${space.location}
+                    </strong>
+
+                    <div>
+                        ${
+                            space.occupancy_status
+                                ? "Occupied"
+                                : "Available"
+                        }
+                    </div>
+
+                </div>
+
+            `).join("");
+
+
+        document.getElementById("analytics")
+            .innerHTML =
+            analytics.length
+
+                ? analytics.map(
+                    reservation => `
+
+                        <p>
+                            Reservation
+                            #${reservation.reservation_id}:
+                            User ${reservation.user_id},
+                            Space ${reservation.parking_space_id},
+                            ${reservation.reservation_status}
+                        </p>
+
+                    `
+                ).join("")
+
+                : "<p>No reservations yet.</p>";
+
+
+        document.getElementById("status")
+            .textContent =
+            "System online";
+
+
     } catch (error) {
-        console.error("Dashboard loading error:", error);
+
+        console.error(error);
+
+        document.getElementById("status")
+            .textContent =
+            "API unavailable";
     }
 }
 
 
-// Load individual parking spaces
-async function loadParkingSpaces() {
-    const response = await fetch(`${SENSOR_API}/api/spaces`);
-
-    if (!response.ok) {
-        throw new Error("Failed to load parking spaces");
-    }
-
-    const spaces = await response.json();
-
-    const grid = document.getElementById("parkingGrid");
-
-    grid.innerHTML = "";
-
-    spaces.forEach(space => {
-
-        const div = document.createElement("div");
-
-        const status = Number(space.occupancy_status) === 1
-            ? "occupied"
-            : "available";
-
-        const statusText = status === "occupied"
-            ? "Occupied"
-            : "Available";
-
-        div.className = `space ${status}`;
-
-        div.innerHTML = `
-            <div>${space.location}</div>
-            <small>${statusText}</small>
-        `;
-
-        grid.appendChild(div);
-    });
-}
-
-
-// Load occupancy statistics
-async function loadOccupancyAnalytics() {
-    const response = await fetch(
-        `${ANALYTICS_API}/api/analytics/occupancy`
-    );
-
-    if (!response.ok) {
-        throw new Error("Failed to load occupancy analytics");
-    }
-
-    const data = await response.json();
-
-    document.getElementById("totalSpaces").textContent =
-        data.total_spaces;
-
-    document.getElementById("occupiedSpaces").textContent =
-        data.occupied_spaces;
-
-    document.getElementById("availableSpaces").textContent =
-        data.available_spaces;
-}
-
-
-// Load reservation statistics
-async function loadReservationAnalytics() {
-    const response = await fetch(
-        `${ANALYTICS_API}/api/analytics/reservations`
-    );
-
-    if (!response.ok) {
-        throw new Error("Failed to load reservation analytics");
-    }
-
-    const data = await response.json();
-
-    document.getElementById("totalReservations").textContent =
-        data.total_reservations;
-
-    document.getElementById("activeReservations").textContent =
-        data.active_reservations;
-
-    document.getElementById("completedReservations").textContent =
-        data.completed_reservations;
-}
-
-
-// Reserve a parking space
-async function reserveParking() {
+async function reserveSpace() {
 
     const userId =
-        document.getElementById("userId").value;
+        Number(
+            document.getElementById("userId").value
+        );
 
-    const result =
-        document.getElementById("reservationResult");
+    const message =
+        document.getElementById("message");
 
-    if (!userId) {
-        result.className = "error";
-        result.textContent = "Please enter a User ID.";
-        return;
-    }
 
     try {
 
-        const response = await fetch(
-            `${ALLOCATION_API}/api/allocate`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    user_id: Number(userId)
-                })
-            }
-        );
+        const result =
+            await getJson(
+                `${ALLOCATION_API}/api/allocate`,
+                {
+                    method: "POST",
 
-        const data = await response.json();
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
 
-        if (!response.ok) {
-            throw new Error(
-                data.error || "Parking allocation failed"
+                    body: JSON.stringify({
+                        user_id: userId
+                    })
+                }
+            );
+
+
+        message.textContent =
+            `Reserved ${result.space.location}
+             (reservation #${result.reservation.reservation_id}).`;
+
+
+        if (NOTIFICATION_API) {
+
+            await getJson(
+                `${NOTIFICATION_API}/api/notify`,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        user_id: userId,
+
+                        message:
+                            `Parking space ${result.space.location}
+                             reserved successfully.`
+                    })
+                }
             );
         }
 
-        result.className = "success";
 
-        result.innerHTML = `
-            <strong>Reservation successful!</strong><br>
-            Reservation ID: ${data.reservation_id}<br>
-            Parking Space: ${data.location}<br>
-            Status: ${data.reservation_status}
-        `;
+        await loadData();
 
-        // Refresh dashboard data
-        await loadDashboard();
 
     } catch (error) {
 
-        console.error("Reservation error:", error);
-
-        result.className = "error";
-
-        result.textContent =
-            error.message || "Failed to reserve parking.";
+        message.textContent =
+            error.message;
     }
 }
 
 
-// Load dashboard when page opens
-document.addEventListener("DOMContentLoaded", () => {
-    loadDashboard();
+loadData();
 
-    // Refresh every 10 seconds
-    setInterval(loadDashboard, 10000);
-});
+setInterval(
+    loadData,
+    10000
+);

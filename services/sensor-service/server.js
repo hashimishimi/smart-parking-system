@@ -1,16 +1,19 @@
 const express = require("express");
-const mysql = require("mysql2/promise");
-const path = require("path");
 const cors = require("cors");
-
-require("dotenv").config({
-    path: path.resolve(__dirname, "../../.env")
-});
+const { Pool } = require("pg");
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : false
+});
 
 app.get("/", (req, res) => {
     res.json({
@@ -19,108 +22,99 @@ app.get("/", (req, res) => {
     });
 });
 
+app.get("/health", async (req, res) => {
+    try {
+        await pool.query("SELECT 1");
 
-const db = mysql.createPool({
-    host: "localhost",
-    user: "root",
-    password: process.env.DB_PASSWORD,
-    database: "smart_parking"
+        res.json({
+            service: "Sensor Service",
+            database: "connected"
+        });
+    } catch (error) {
+        res.status(500).json({
+            service: "Sensor Service",
+            database: "unavailable"
+        });
+    }
 });
-
-
 
 app.get("/api/spaces", async (req, res) => {
     try {
-        const [rows] = await db.query(`
+        const result = await pool.query(`
             SELECT
                 parking_space_id,
                 location,
                 occupancy_status,
                 last_updated
-            FROM ParkingSpaces
+            FROM parking_spaces
             ORDER BY parking_space_id
         `);
 
-        res.json(rows);
+        res.json(result.rows);
 
     } catch (error) {
-        console.error("Failed to retrieve parking spaces:", error);
+        console.error(error);
 
         res.status(500).json({
-            error: "Failed to retrieve parking spaces"
+            error: "Failed to fetch parking spaces"
         });
     }
 });
 
-
-
 app.post("/api/sensor", async (req, res) => {
+
+    const {
+        sensor_id,
+        parking_space_id,
+        occupancy_status
+    } = req.body;
+
+    if (
+        sensor_id === undefined ||
+        parking_space_id === undefined ||
+        occupancy_status === undefined
+    ) {
+        return res.status(400).json({
+            error: "sensor_id, parking_space_id and occupancy_status are required"
+        });
+    }
+
     try {
-        const {
-            sensor_id,
-            parking_space_id,
-            occupancy_status,
-            timestamp
-        } = req.body;
 
+        const result = await pool.query(`
+            UPDATE parking_spaces
+            SET
+                occupancy_status = $1,
+                last_updated = CURRENT_TIMESTAMP
+            WHERE parking_space_id = $2
+            RETURNING *
+        `, [
+            Boolean(occupancy_status),
+            parking_space_id
+        ]);
 
-        if (
-            sensor_id === undefined ||
-            parking_space_id === undefined ||
-            occupancy_status === undefined ||
-            timestamp === undefined
-        ) {
-            return res.status(400).json({
-                error: "Missing required sensor data"
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                error: "Parking space not found"
             });
         }
 
-
-        const mysqlTimestamp = new Date(timestamp)
-            .toISOString()
-            .slice(0, 19)
-            .replace("T", " ");
-
-
-        await db.execute(
-            `UPDATE ParkingSpaces
-            SET occupancy_status = ?, last_updated = ?
-            WHERE parking_space_id = ?`,
-            [
-                occupancy_status ? 1 : 0,
-                mysqlTimestamp,
-                parking_space_id
-            ]
-        );
-
-
-        console.log(
-            `Updated parking space ${parking_space_id}: ${
-                occupancy_status ? "occupied" : "vacant"
-            }`
-        );
-
-
         res.json({
-            message: "Sensor data processed successfully",
-            parking_space_id: parking_space_id,
-            occupancy_status: occupancy_status
+            message: "Sensor data processed",
+            sensor_id,
+            space: result.rows[0]
         });
 
-
     } catch (error) {
-        console.error("Database error:", error);
+
+        console.error(error);
 
         res.status(500).json({
-            error: "Failed to process sensor data"
+            error: "Failed to update parking space"
         });
     }
 });
 
-
-const PORT = 3000;
-
-
-app.listen(PORT, () => {
-    console.log(`Sensor Service is running on http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Sensor Service listening on port ${PORT}`);
 });

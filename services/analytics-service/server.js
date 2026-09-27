@@ -1,87 +1,103 @@
 const express = require("express");
-const mysql = require("mysql2/promise");
-const path = require("path");
 const cors = require("cors");
-
-require("dotenv").config({
-  path: path.resolve(__dirname, "../../.env")
-});
+const { Pool } = require("pg");
 
 const app = express();
-const PORT = 3003;
+const PORT = process.env.PORT || 3003;
 
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
 
-const db = mysql.createPool({
-  host: "localhost",
-  user: "root",
-  password: process.env.DB_PASSWORD,
-  database: "smart_parking"
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : false
 });
 
-// Health check
 app.get("/", (req, res) => {
-  res.json({
-    service: "Analytics Service",
-    status: "running"
-  });
+    res.json({
+        service: "Analytics Service",
+        status: "running"
+    });
 });
 
-// Parking occupancy analytics
+app.get("/health", async (req, res) => {
+
+    try {
+
+        await pool.query("SELECT 1");
+
+        res.json({
+            service: "Analytics Service",
+            database: "connected"
+        });
+
+    } catch (error) {
+
+        res.status(500).json({
+            service: "Analytics Service",
+            database: "unavailable"
+        });
+    }
+});
+
 app.get("/api/analytics/occupancy", async (req, res) => {
-  try {
-    const [rows] = await db.query(`
-      SELECT
-        COUNT(*) AS total_spaces,
-        SUM(CASE WHEN occupancy_status = 1 THEN 1 ELSE 0 END) AS occupied_spaces,
-        SUM(CASE WHEN occupancy_status = 0 THEN 1 ELSE 0 END) AS available_spaces
-      FROM ParkingSpaces
-    `);
 
-    const data = rows[0];
+    try {
 
-    res.json({
-      total_spaces: data.total_spaces,
-      occupied_spaces: data.occupied_spaces,
-      available_spaces: data.available_spaces
-    });
+        const result = await pool.query(`
+            SELECT
+                COUNT(*) AS total_spaces,
+                COUNT(*) FILTER (
+                    WHERE occupancy_status = TRUE
+                ) AS occupied_spaces,
+                COUNT(*) FILTER (
+                    WHERE occupancy_status = FALSE
+                ) AS available_spaces
+            FROM parking_spaces
+        `);
 
-  } catch (error) {
-    console.error("Occupancy analytics error:", error);
-    res.status(500).json({
-      error: "Failed to retrieve occupancy analytics"
-    });
-  }
+        res.json(result.rows[0]);
+
+    } catch (error) {
+
+        console.error(error);
+
+        res.status(500).json({
+            error: "Failed to calculate occupancy"
+        });
+    }
 });
 
-// Reservation analytics
 app.get("/api/analytics/reservations", async (req, res) => {
-  try {
-    const [rows] = await db.query(`
-      SELECT
-        COUNT(*) AS total_reservations,
-        SUM(CASE WHEN reservation_status = 'Reserved' THEN 1 ELSE 0 END) AS active_reservations,
-        SUM(CASE WHEN reservation_status = 'Completed' THEN 1 ELSE 0 END) AS completed_reservations
-      FROM Reservations
-    `);
 
-    const data = rows[0];
+    try {
 
-    res.json({
-      total_reservations: data.total_reservations,
-      active_reservations: data.active_reservations,
-      completed_reservations: data.completed_reservations
-    });
+        const result = await pool.query(`
+            SELECT
+                reservation_id,
+                user_id,
+                parking_space_id,
+                reservation_status,
+                entry_time,
+                exit_time
+            FROM reservations
+            ORDER BY reservation_id DESC
+        `);
 
-  } catch (error) {
-    console.error("Reservation analytics error:", error);
-    res.status(500).json({
-      error: "Failed to retrieve reservation analytics"
-    });
-  }
+        res.json(result.rows);
+
+    } catch (error) {
+
+        console.error(error);
+
+        res.status(500).json({
+            error: "Failed to fetch reservations"
+        });
+    }
 });
 
-app.listen(PORT, () => {
-  console.log(`Analytics Service running on port ${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Analytics Service listening on port ${PORT}`);
 });

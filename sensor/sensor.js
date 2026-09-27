@@ -1,47 +1,87 @@
 const mqtt = require("mqtt");
 
-const client = mqtt.connect("mqtt://localhost:1883");
+const MQTT_BROKER =
+    process.env.MQTT_BROKER ||
+    "mqtt://localhost:1883";
+
+const TOPIC =
+    process.env.MQTT_TOPIC ||
+    "smartparking/sensors";
+
+const client =
+    mqtt.connect(MQTT_BROKER);
 
 
-const parkingSpaces = [
-    { sensor_id: 1, parking_space_id: 1, location: "A01" },
-    { sensor_id: 2, parking_space_id: 2, location: "A02" },
-    { sensor_id: 3, parking_space_id: 3, location: "A03" },
-    { sensor_id: 4, parking_space_id: 4, location: "A04" },
-    { sensor_id: 5, parking_space_id: 5, location: "A05" },
-    { sensor_id: 6, parking_space_id: 6, location: "B01" },
-    { sensor_id: 7, parking_space_id: 7, location: "B02" },
-    { sensor_id: 8, parking_space_id: 8, location: "B03" },
-    { sensor_id: 9, parking_space_id: 9, location: "B04" },
-    { sensor_id: 10, parking_space_id: 10, location: "B05" }
-];
+const spaces =
+    Array.from(
+        { length: 10 },
+        (_, i) => i + 1
+    );
 
 
 client.on("connect", () => {
-    console.log("Connected to MQTT broker");
+
+    console.log(
+        `Connected to MQTT broker: ${MQTT_BROKER}`
+    );
+
 
     setInterval(() => {
-        const space = parkingSpaces[Math.floor(Math.random() * parkingSpaces.length)];
 
-        const occupied = Math.random() < 0.5;
+        const parkingSpaceId =
+            spaces[
+                Math.floor(
+                    Math.random() *
+                    spaces.length
+                )
+            ];
 
-        const sensorData = {
-            sensor_id: space.sensor_id,
-            parking_space_id: space.parking_space_id,
-            location: space.location,
-            occupancy_status: occupied,
-            timestamp: new Date().toISOString()
+
+        const occupancyStatus =
+            Math.random() > 0.5;
+
+
+        const payload = {
+
+            sensor_id:
+                `S${String(parkingSpaceId)
+                    .padStart(2, "0")}`,
+
+            parking_space_id:
+                parkingSpaceId,
+
+            location:
+                `SPACE-${parkingSpaceId}`,
+
+            occupancy_status:
+                occupancyStatus,
+
+            timestamp:
+                new Date().toISOString()
         };
 
-        const message = JSON.stringify(sensorData);
 
-        client.publish("smartparking/sensors", message);
+        client.publish(
+            TOPIC,
+            JSON.stringify(payload)
+        );
 
-        console.log("Sensor event:", sensorData);
 
-    }, 5000)
+        console.log(
+            "Published:",
+            payload
+        );
+
+    }, 5000);
+
 });
 
-client.on("error", (error) => {
-    console.error("MQTT connection error:", error);
+
+client.on("error", error => {
+
+    console.error(
+        "MQTT error:",
+        error.message
+    );
+
 });

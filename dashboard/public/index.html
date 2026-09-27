@@ -1,115 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Parking Management System</title>
-    <link rel="stylesheet" href="style.css">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>ParkSense Smart Parking</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
 </head>
 
 <body>
 
-    <header>
-        <h1>Smart Parking Management System</h1>
-        <p>Real-time parking monitoring and allocation</p>
-    </header>
+<header>
 
-    <main>
+    <div>
 
-        <section class="stats">
+        <h1>ParkSense</h1>
 
-            <div class="stat-card">
-                <h2 id="totalSpaces">-</h2>
-                <p>Total Spaces</p>
-            </div>
+        <p>
+            Smart Parking Management System
+        </p>
 
-            <div class="stat-card">
-                <h2 id="occupiedSpaces">-</h2>
-                <p>Occupied</p>
-            </div>
+    </div>
 
-            <div class="stat-card">
-                <h2 id="availableSpaces">-</h2>
-                <p>Available</p>
-            </div>
+    <span
+        id="status"
+        class="status"
+    >
+        Connecting...
+    </span>
 
-        </section>
+</header>
 
-        <section class="panel">
+<main>
 
-            <div class="panel-header">
-                <h2>Parking Spaces</h2>
+    <section class="stats">
 
-                <button onclick="loadDashboard()">
-                    Refresh
-                </button>
-            </div>
+        <div class="card">
 
-            <div id="parkingGrid" class="parking-grid">
-                Loading parking spaces...
-            </div>
+            <h3>Total Spaces</h3>
 
-        </section>
+            <strong id="total">
+                0
+            </strong>
 
-        <section class="panel">
+        </div>
 
-            <h2>Reserve Parking</h2>
+        <div class="card">
 
-            <div class="reservation-form">
+            <h3>Available</h3>
 
-                <label for="userId">
-                    User ID
-                </label>
+            <strong id="available">
+                0
+            </strong>
 
-                <input
-                    type="number"
-                    id="userId"
-                    value="1"
-                    min="1"
-                >
+        </div>
 
-                <button onclick="reserveParking()">
-                    Reserve Parking
-                </button>
+        <div class="card">
 
-            </div>
+            <h3>Occupied</h3>
 
-            <div id="reservationResult"></div>
+            <strong id="occupied">
+                0
+            </strong>
 
-        </section>
+        </div>
 
-        <section class="panel">
+        <div class="card">
 
-            <h2>Reservation Analytics</h2>
+            <h3>Reservations</h3>
 
-            <div class="analytics">
+            <strong id="reservations">
+                0
+            </strong>
 
-                <div>
-                    <strong id="totalReservations">-</strong>
-                    <span>Total Reservations</span>
-                </div>
+        </div>
 
-                <div>
-                    <strong id="activeReservations">-</strong>
-                    <span>Active Reservations</span>
-                </div>
+    </section>
 
-                <div>
-                    <strong id="completedReservations">-</strong>
-                    <span>Completed Reservations</span>
-                </div>
 
-            </div>
+    <section class="panel">
 
-        </section>
+        <div class="panel-heading">
 
-    </main>
+            <h2>
+                Parking Spaces
+            </h2>
 
-    <footer>
-        <p>Smart Parking IoT System</p>
-    </footer>
+            <button onclick="loadData()">
+                Refresh
+            </button>
 
-    <script src="app.js"></script>
+        </div>
+
+        <div
+            id="spaces"
+            class="spaces"
+        ></div>
+
+    </section>
+
+
+    <section class="panel">
+
+        <h2>
+            Reserve a Space
+        </h2>
+
+        <div class="reserve-row">
+
+            <input
+                id="userId"
+                type="number"
+                value="1"
+                min="1"
+                placeholder="User ID"
+            >
+
+            <button onclick="reserveSpace()">
+                Find & Reserve
+            </button>
+
+        </div>
+
+        <p id="message"></p>
+
+    </section>
+
+
+    <section class="panel">
+
+        <h2>
+            Reservation Analytics
+        </h2>
+
+        <div id="analytics"></div>
+
+    </section>
+
+</main>
+
+<script src="/config.js"></script>
+
+<script src="/app.js"></script>
 
 </body>
+
 </html>

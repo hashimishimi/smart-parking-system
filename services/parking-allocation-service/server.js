@@ -1,25 +1,19 @@
 const express = require("express");
-const mysql = require("mysql2/promise");
-const path = require("path");
 const cors = require("cors");
-
-require("dotenv").config({
-    path: path.resolve(__dirname, "../../.env")
-});
-
+const { Pool } = require("pg");
 
 const app = express();
+const PORT = process.env.PORT || 3001;
 
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
 
-const db = mysql.createPool({
-    host: "localhost",
-    user: "root",
-    password: process.env.DB_PASSWORD,
-    database: "smart_parking"
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : false
 });
-
 
 app.get("/", (req, res) => {
     res.json({
@@ -28,87 +22,111 @@ app.get("/", (req, res) => {
     });
 });
 
-
 app.post("/api/allocate", async (req, res) => {
 
-    try {
-        const { user_id } = req.body;
+    const { user_id } = req.body;
 
-        if (user_id === undefined) {
-            return res.status(400).json({
-                error: "User_id is required"
+    if (!user_id) {
+        return res.status(400).json({
+            error: "user_id is required"
+        });
+    }
+
+    const client = await pool.connect();
+
+    try {
+
+        await client.query("BEGIN");
+
+        const user = await client.query(
+            "SELECT user_id FROM users WHERE user_id = $1",
+            [user_id]
+        );
+
+        if (user.rowCount === 0) {
+
+            await client.query("ROLLBACK");
+
+            return res.status(404).json({
+                error: "User not found"
             });
         }
 
-        const [spaces] = await db.execute(
-            `SELECT parking_space_id, location
-            FROM ParkingSpaces
-            WHERE occupancy_status = 0
+        const space = await client.query(`
+            SELECT
+                parking_space_id,
+                location
+            FROM parking_spaces
+            WHERE occupancy_status = FALSE
             ORDER BY parking_space_id
-            LIMIT 1`
-        );
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+        `);
 
-        if (spaces.length === 0) {
+        if (space.rowCount === 0) {
+
+            await client.query("ROLLBACK");
+
             return res.status(409).json({
                 error: "No parking spaces available"
             });
         }
 
+        const selected = space.rows[0];
 
-        const parkingSpace = spaces[0];
+        const reservation = await client.query(`
+            INSERT INTO reservations
+                (
+                    user_id,
+                    parking_space_id,
+                    reservation_status
+                )
+            VALUES
+                (
+                    $1,
+                    $2,
+                    'Reserved'
+                )
+            RETURNING *
+        `, [
+            user_id,
+            selected.parking_space_id
+        ]);
 
+        await client.query(`
+            UPDATE parking_spaces
+            SET
+                occupancy_status = TRUE,
+                last_updated = CURRENT_TIMESTAMP
+            WHERE parking_space_id = $1
+        `, [
+            selected.parking_space_id
+        ]);
 
-        const [result] = await db.execute(
-            `INSERT INTO Reservations 
-            (user_id, parking_space_id, reservation_status, entry_time) 
-            VALUES (?, ?, ?, NOW())`,
+        await client.query("COMMIT");
 
-            [
-                user_id, parkingSpace.parking_space_id, "Reserved"
-            ]
-        );
-
-
-        await db.execute(
-            `UPDATE ParkingSpaces SET occupancy_status = 1 WHERE parking_space_id = ?`,
-            [
-                parkingSpace.parking_space_id
-            ]
-        );
-
-
-
-        console.log(
-            `Parking space ${parkingSpace.location} reserved for user ${user_id}`
-        );
-
-
-
-        res.status(201).json({
-            message: "Parking space reserved successfully",
-            reservation_id: result.insertId,
-            user_id: user_id,
-            parking_space_id: parkingSpace.parking_space_id,
-            location: parkingSpace.location,
-            reservation_status: "Reserved"
+        res.json({
+            message: "Parking space allocated successfully",
+            space: selected,
+            reservation: reservation.rows[0]
         });
-
 
     } catch (error) {
-        console.error("Database error:", error);
+
+        await client.query("ROLLBACK");
+
+        console.error(error);
 
         res.status(500).json({
-            error: "Failed to allocate parking space"
+            error: "Allocation failed"
         });
+
+    } finally {
+
+        client.release();
     }
 });
 
-
-
-const PORT = 3001;
-
-app.listen(PORT, () => {
-    console.log(
-        `Parking Allocation Service is running on http://localhost:${PORT}`
-    );
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Parking Allocation Service listening on port ${PORT}`);
 });
