@@ -168,6 +168,21 @@ app.post("/api/notification/notify", async (req, res) => {
     }
 });
 
+
+app.get("/debug/routes", (req, res) => {
+    res.json({
+        sensorProxy: typeof SENSOR_API_URL !== "undefined",
+        routes: [
+            "/api/sensor/spaces",
+            "/api/sensor",
+            "/api/allocation/allocate",
+            "/api/analytics/occupancy",
+            "/api/notification/notify"
+        ]
+    });
+});
+
+
 /* ---------------- HEALTH ---------------- */
 
 app.get("/health", (req, res) => {
