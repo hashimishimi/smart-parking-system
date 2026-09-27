@@ -1,6 +1,7 @@
 {
   "name": "sensor-service",
   "version": "1.0.0",
+  "description": "Smart Parking Sensor Service",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
